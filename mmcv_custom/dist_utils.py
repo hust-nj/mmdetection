@@ -43,6 +43,7 @@ def _init_dist_mpi(backend, **kwargs):
     world_size = ompi_size()
     rank = ompi_rank()
     # TODO: find a better way to support both philly and AML enviroment
+    print(get_aml_master_ip())
     if get_aml_master_ip() is not None:
         dist_url = 'tcp://' + get_aml_master_ip() + ':23456'
     else:
