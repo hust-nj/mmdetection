@@ -13,7 +13,7 @@ train_pipeline = [
     dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
 ]
 test_pipeline = [
-    dict(type='LoadImageFromFile'),
+    dict(type='LoadImageFromZip'),
     dict(
         type='MultiScaleFlipAug',
         img_scale=(1333, 800),
