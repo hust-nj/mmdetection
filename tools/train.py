@@ -54,7 +54,7 @@ def parse_args():
 
     # add aml support 
     parser.add_argument('--aml', action='store_true', help='whether to train on aml')
-    parser.add_argument('--aml_data_store', default='yich', help='aml data_store name')
+    parser.add_argument('--aml_data_store', default='/nj', help='aml data_store name')
     parser.add_argument('--aml_work_dir_prefix', default='work_dirs/reppoints_new/',
                         help='aml work_dir prefix')
 
@@ -77,8 +77,7 @@ def main():
 
     # add aml support 
     if args.aml:
-        data_store = os.environ['AZUREML_DATAREFERENCE_{}'.format(args.aml_data_store)]
-        print('data_store: ', os.environ[data_store[1:].split('/')[0]])
+        data_store = args.aml_data_store
         new_data_root = os.path.join(data_store, cfg.data_root)
         cfg.data.train.ann_file = cfg.data.train.ann_file.replace(cfg.data_root, new_data_root)
         cfg.data.train.img_prefix = cfg.data.train.img_prefix.replace(cfg.data_root, new_data_root)
