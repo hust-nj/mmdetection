@@ -51,6 +51,13 @@ def parse_args():
         default='none',
         help='job launcher')
     parser.add_argument('--local_rank', type=int, default=0)
+
+    # add aml support 
+    parser.add_argument('--aml', action='store_true', help='whether to train on aml')
+    parser.add_argument('--aml_data_store', default='yich', help='aml data_store name')
+    parser.add_argument('--aml_work_dir_prefix', default='work_dirs/reppoints_new/',
+                        help='aml work_dir prefix')
+
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -68,14 +75,30 @@ def main():
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
 
+    # add aml support 
+    if args.aml:
+        data_store = os.environ['AZUREML_DATAREFERENCE_{}'.format(args.aml_data_store)]
+        cfg.data.data_root = os.path.join(data_store, cfg.data.data_root)
+        print('data_root: ', cfg.data.data_root)
+        cfg.data.train.ann_file = cfg.data.train.ann_file.replace('data/coco/', cfg.data.data_root)
+        cfg.data.train.img_prefix = cfg.data.train.img_prefix.replace('data/coco/', cfg.data.data_root)
+        cfg.data.val.ann_file = cfg.data.val.ann_file.replace('data/coco/', cfg.data.data_root)
+        cfg.data.val.img_prefix = cfg.data.val.img_prefix.replace('data/coco/', cfg.data.data_root)
+        cfg.data.test.ann_file = cfg.data.test.ann_file.replace('data/coco/', cfg.data.data_root)
+        cfg.data.test.img_prefix = cfg.data.test.img_prefix.replace('data/coco/', cfg.data.data_root)
+
+
     # work_dir is determined in this priority: CLI > segment in file > filename
     if args.work_dir is not None:
         # update configs according to CLI args if args.work_dir is not None
         cfg.work_dir = args.work_dir
     elif cfg.get('work_dir', None) is None:
         # use config filename as default work_dir if cfg.work_dir is None
-        cfg.work_dir = osp.join('./work_dirs',
-                                osp.splitext(osp.basename(args.config))[0])
+        if not args.aml:
+            cfg.work_dir = osp.join('./work_dirs', osp.splitext(osp.basename(args.config))[0])
+        else:
+            cfg.work_dir = os.path.join(data_store, args.aml_work_dir_prefix, osp.splitext(osp.basename(args.config))[0])
+            print('work_dir: ', cfg.work_dir)
     if args.resume_from is not None:
         cfg.resume_from = args.resume_from
     if args.gpu_ids is not None:
