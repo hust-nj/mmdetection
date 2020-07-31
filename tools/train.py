@@ -78,14 +78,15 @@ def main():
     # add aml support 
     if args.aml:
         data_store = os.environ['AZUREML_DATAREFERENCE_{}'.format(args.aml_data_store)]
-        cfg.data.data_root = os.path.join(data_store, cfg.data.data_root)
-        print('data_root: ', cfg.data.data_root)
-        cfg.data.train.ann_file = cfg.data.train.ann_file.replace('data/coco/', cfg.data.data_root)
-        cfg.data.train.img_prefix = cfg.data.train.img_prefix.replace('data/coco/', cfg.data.data_root)
-        cfg.data.val.ann_file = cfg.data.val.ann_file.replace('data/coco/', cfg.data.data_root)
-        cfg.data.val.img_prefix = cfg.data.val.img_prefix.replace('data/coco/', cfg.data.data_root)
-        cfg.data.test.ann_file = cfg.data.test.ann_file.replace('data/coco/', cfg.data.data_root)
-        cfg.data.test.img_prefix = cfg.data.test.img_prefix.replace('data/coco/', cfg.data.data_root)
+        new_data_root = os.path.join(data_store, cfg.data_root)
+        cfg.data.train.ann_file = cfg.data.train.ann_file.replace(cfg.data_root, new_data_root)
+        cfg.data.train.img_prefix = cfg.data.train.img_prefix.replace(cfg.data_root, new_data_root)
+        cfg.data.val.ann_file = cfg.data.val.ann_file.replace(cfg.data_root, new_data_root)
+        cfg.data.val.img_prefix = cfg.data.val.img_prefix.replace(cfg.data_root, new_data_root)
+        cfg.data.test.ann_file = cfg.data.test.ann_file.replace(cfg.data_root, new_data_root)
+        cfg.data.test.img_prefix = cfg.data.test.img_prefix.replace(cfg.data_root, new_data_root)
+        cfg.data_root = new_data_root
+        print('data_root: ', cfg.data_root)
 
 
     # work_dir is determined in this priority: CLI > segment in file > filename
