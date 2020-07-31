@@ -78,6 +78,7 @@ def main():
     # add aml support 
     if args.aml:
         data_store = os.environ['AZUREML_DATAREFERENCE_{}'.format(args.aml_data_store)]
+        print('data_store: ', os.environ[data_store[1:].split('/')[0]])
         new_data_root = os.path.join(data_store, cfg.data_root)
         cfg.data.train.ann_file = cfg.data.train.ann_file.replace(cfg.data_root, new_data_root)
         cfg.data.train.img_prefix = cfg.data.train.img_prefix.replace(cfg.data_root, new_data_root)
