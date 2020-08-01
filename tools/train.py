@@ -66,6 +66,8 @@ def parse_args():
 
 
 def main():
+    print('see nvidia-smi gpu')
+    os.system('nvidia-smi')
     args = parse_args()
 
     cfg = Config.fromfile(args.config)
