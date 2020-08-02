@@ -1,6 +1,19 @@
 import zipfile
 import os
 
+import cv2
+import numpy as np
+
+from mmcv.utils import is_str
+
+from cv2 import IMREAD_COLOR, IMREAD_GRAYSCALE, IMREAD_UNCHANGED
+
+imread_flags = {
+    'color': IMREAD_COLOR,
+    'grayscale': IMREAD_GRAYSCALE,
+    'unchanged': IMREAD_UNCHANGED
+}
+
 
 class ZipReader(object):
     zip_bank = dict()
@@ -21,7 +34,7 @@ class ZipReader(object):
 
     @staticmethod
     def split_zip_style_path(path):
-        pos_at = path.index('@')
+        pos_at = path.find('@')
         if pos_at == -1:
             print("character '@' is not found from the given path '%s'" %
                   (path))
@@ -66,6 +79,14 @@ class ZipReader(object):
 
         return file_lists
 
+    @staticmethod
+    def imread(path, flag='color'):
+        zip_path, path_img = ZipReader.split_zip_style_path(path)
+        zfile = ZipReader.get_zipfile(zip_path)
+        data = zfile.read(path_img)
+        flag = imread_flags[flag] if is_str(flag) else flag
+        im = cv2.imdecode(np.frombuffer(data, np.uint8), flag)
+        return im
 
     @staticmethod
     def read(path):
