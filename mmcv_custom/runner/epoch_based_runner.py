@@ -63,6 +63,6 @@ class EpochBasedRunner(mmcv.runner.EpochBasedRunner):
 
     def auto_resume(self, resume_epoch=None):
         linkname = osp.join(self.work_dir, 'latest.pth')
-        assert osp.exists(linkname), "{} not find".format(linkname)
-        self.logger.info('latest checkpoint found')
-        self.resume(linkname)
+        if osp.exists(linkname):
+            self.logger.info('latest checkpoint found')
+            self.resume(linkname)
