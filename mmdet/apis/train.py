@@ -3,8 +3,9 @@ import random
 import numpy as np
 import torch
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
-from mmcv.runner import (HOOKS, DistSamplerSeedHook, EpochBasedRunner,
+from mmcv.runner import (HOOKS, DistSamplerSeedHook,
                          OptimizerHook, build_optimizer)
+from mmcv_custom import EpochBasedRunner
 from mmcv.utils import build_from_cfg
 
 from mmdet.core import DistEvalHook, EvalHook, Fp16OptimizerHook
@@ -138,6 +139,8 @@ def train_detector(model,
 
     if cfg.resume_from:
         runner.resume(cfg.resume_from)
+    elif cfg.get("auto_resume", True):
+        runner.auto_resume(cfg.get("resume_epoch", None))
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
     runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
