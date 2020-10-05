@@ -55,7 +55,7 @@ def parse_args():
     # add aml support 
     parser.add_argument('--aml', action='store_true', help='whether to train on aml')
     parser.add_argument('--aml_data_store', default='/nj', help='aml data_store name')
-    parser.add_argument('--aml_work_dir_prefix', default='work_dirs/reppoints_new/',
+    parser.add_argument('--aml_work_dir_prefix', default='work_dirs/mmdet/',
                         help='aml work_dir prefix')
 
     args = parser.parse_args()
@@ -77,18 +77,23 @@ def main():
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
 
+
+    # phillytools
+    if 'PT_DATA_DIR' in os.environ:
+        data_store = os.environ['PT_DATA_DIR']
     # add aml support 
-    if args.aml:
+    elif args.aml:
         data_store = args.aml_data_store
-        new_data_root = os.path.join(data_store, cfg.data_root)
-        cfg.data.train.ann_file = cfg.data.train.ann_file.replace(cfg.data_root, new_data_root)
-        cfg.data.train.img_prefix = cfg.data.train.img_prefix.replace(cfg.data_root, new_data_root)
-        cfg.data.val.ann_file = cfg.data.val.ann_file.replace(cfg.data_root, new_data_root)
-        cfg.data.val.img_prefix = cfg.data.val.img_prefix.replace(cfg.data_root, new_data_root)
-        cfg.data.test.ann_file = cfg.data.test.ann_file.replace(cfg.data_root, new_data_root)
-        cfg.data.test.img_prefix = cfg.data.test.img_prefix.replace(cfg.data_root, new_data_root)
-        cfg.data_root = new_data_root
-        print('data_root: ', cfg.data_root)
+    else:
+        data_store = ''
+    cfg.data.train.ann_file = osp.join(data_store, cfg.data.train.ann_file)
+    cfg.data.train.img_prefix = osp.join(data_store, cfg.data.train.img_prefix)
+    cfg.data.val.ann_file = osp.join(data_store, cfg.data.val.ann_file)
+    cfg.data.val.img_prefix = osp.join(data_store, cfg.data.val.img_prefix)
+    cfg.data.test.ann_file = osp.join(data_store, cfg.data.test.ann_file)
+    cfg.data.test.img_prefix = osp.join(data_store, cfg.data.test.img_prefix)
+    cfg.data_root = osp.join(data_store, cfg.data_root)
+    print('data_root: ', cfg.data_root)
 
 
     # work_dir is determined in this priority: CLI > segment in file > filename
@@ -97,11 +102,16 @@ def main():
         cfg.work_dir = args.work_dir
     elif cfg.get('work_dir', None) is None:
         # use config filename as default work_dir if cfg.work_dir is None
-        if not args.aml:
-            cfg.work_dir = osp.join('./work_dirs', osp.splitext(osp.basename(args.config))[0])
+        # phillytools
+        if 'PT_OUTPUT_DIR' in os.environ:
+            out_store = osp.join(os.environ['PT_OUTPUT_DIR'], args.aml_work_dir_prefix)
+        # add aml support
+        elif args.aml:
+            out_store = osp.join(data_store, args.aml_work_dir_prefix)
         else:
-            cfg.work_dir = os.path.join(data_store, args.aml_work_dir_prefix, osp.splitext(osp.basename(args.config))[0])
-            print('work_dir: ', cfg.work_dir)
+            out_store = './work_dirs'
+        cfg.work_dir = osp.join(out_store, osp.splitext(osp.basename(args.config))[0])
+        print('work_dir: ', cfg.work_dir)
     if args.resume_from is not None:
         cfg.resume_from = args.resume_from
     if args.gpu_ids is not None:
