@@ -1,10 +1,10 @@
 _base_ = [
-    '../_base_/datasets/coco_detection.py',
+    '../_base_/datasets/coco_instance.py',
     '../_base_/schedules/schedule_1x.py', '../_base_/default_runtime.py'
 ]
 # model settings
 model = dict(
-    type='FCOS',
+    type='FCOSCondConv',
     pretrained='open-mmlab://detectron/resnet50_caffe',
     backbone=dict(
         type='ResNet',
@@ -25,7 +25,7 @@ model = dict(
         num_outs=5,
         relu_before_extra_convs=True),
     bbox_head=dict(
-        type='FCOSHead',
+        type='FCOSHeadCondConv',
         num_classes=80,
         in_channels=256,
         stacked_convs=4,
@@ -40,7 +40,38 @@ model = dict(
             loss_weight=1.0),
         loss_bbox=dict(type='IoULoss', loss_weight=1.0),
         loss_centerness=dict(
-            type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0)))
+            type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0),
+    mask_head=dict(
+        type='CondConvMaskHead',
+        branch_cfg=dict(
+            in_channels=256, # == neck out channels
+            channels=128,
+            in_features=[0,1,2],
+            out_stride=[8,16,32], # p3, p4, p5
+            norm=dict(type='BN', requires_grad=True),
+            num_convs=4,
+            out_channels=8,
+            semantic_loss_on=False,
+            num_classes=80,
+            loss_sem=dict(
+                type='FocalLoss',
+                use_sigmoid=True,
+                gamma=2.0,
+                alpha=0.25,
+                loss_weight=1.0,
+                prior_prob=0.01)
+        ),
+        head_cfg=dict(
+            channels=8,
+            disable_rel_coords=False,
+            num_layers=3,
+            use_fp16=False,
+            mask_out_stride=4,
+            max_proposals=500,
+            sizes_of_interest=[64, 128, 256, 512, 1024]
+        )
+    )),
+)
 # training and testing settings
 train_cfg = dict(
     assigner=dict(
