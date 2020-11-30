@@ -9,7 +9,8 @@ def multiclass_nms(multi_bboxes,
                    score_thr,
                    nms_cfg,
                    max_num=-1,
-                   score_factors=None):
+                   score_factors=None,
+                   inst_inds=None):
     """NMS for multi-class bboxes.
 
     Args:
@@ -32,9 +33,13 @@ def multiclass_nms(multi_bboxes,
     # exclude background category
     if multi_bboxes.shape[1] > 4:
         bboxes = multi_bboxes.view(multi_scores.size(0), -1, 4)
+        if inst_inds is not None:
+            inst_inds = inst_inds.view(inst_inds.size(0), -1)
     else:
         bboxes = multi_bboxes[:, None].expand(
             multi_scores.size(0), num_classes, 4)
+        if inst_inds is not None:
+            inst_inds = inst_inds[:, None].expand(-1, num_classes)
 
     scores = multi_scores[:, :-1]
     if score_factors is not None:
@@ -51,10 +56,14 @@ def multiclass_nms(multi_bboxes,
     valid_mask = scores > score_thr
     inds = valid_mask.nonzero(as_tuple=False).squeeze(1)
     bboxes, scores, labels = bboxes[inds], scores[inds], labels[inds]
+    if inst_inds is not None:
+        inst_inds = inst_inds[inds]
     if inds.numel() == 0:
         if torch.onnx.is_in_onnx_export():
             raise RuntimeError('[ONNX Error] Can not record NMS '
                                'as it has not been executed this time')
+        if inst_inds is not None:
+            return bboxes, labels, inst_inds
         return bboxes, labels
 
     # TODO: add size check before feed into batched_nms
@@ -64,6 +73,8 @@ def multiclass_nms(multi_bboxes,
         dets = dets[:max_num]
         keep = keep[:max_num]
 
+    if inst_inds is not None:
+        return dets, labels[keep], inst_inds[keep]
     return dets, labels[keep]
 
 
