@@ -403,7 +403,7 @@ class FCOSHeadCondConv(AnchorFreeHead):
                 cls_scores, bbox_preds, centernesses, mlvl_points)):
             assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
             if self.mask_head:
-                inst_ind = torch.arange(cls_score.shape[-2:].numel(), device=cls_score.device) + self.level_sum[i_lvl] + imid_shift[i_lvl]                
+                inst_ind = torch.arange(cls_score.shape[-2] * cls_score.shape[-1], device=cls_score.device) + self.level_sum[i_lvl] + imid_shift[i_lvl]                
             scores = cls_score.permute(1, 2, 0).reshape(
                 -1, self.cls_out_channels).sigmoid()
             centerness = centerness.permute(1, 2, 0).reshape(-1).sigmoid()

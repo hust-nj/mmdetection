@@ -65,7 +65,7 @@ class FCOSCondConv(SingleStageDetector):
                 for det_bboxes, det_labels, _ in bbox_list
             ]
             cls_segms = [self.mask2result([xl[[i]] for xl in x], det_labels, inst_inds, img_metas[i]) for i, (_, det_labels, inst_inds) in enumerate(bbox_list)]
-            return bbox_results, cls_segms
+            return list(zip(bbox_results, cls_segms))
 
     def forward_train(self,
                       img,

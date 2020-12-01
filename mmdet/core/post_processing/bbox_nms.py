@@ -51,6 +51,8 @@ def multiclass_nms(multi_bboxes,
     bboxes = bboxes.reshape(-1, 4)
     scores = scores.reshape(-1)
     labels = labels.reshape(-1)
+    if inst_inds is not None:
+        inst_inds = inst_inds.reshape(-1)
 
     # remove low scoring boxes
     valid_mask = scores > score_thr
