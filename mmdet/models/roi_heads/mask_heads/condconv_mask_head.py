@@ -73,6 +73,13 @@ def aligned_bilinear(tensor, factor):
 
     return tensor[:, :, :oh - 1, :ow - 1]
 
+def downsample_mask(mask, stride):
+    assert stride >= 1
+    assert int(stride) == stride
+    mask = mask[:, None, stride // 2::stride,
+                        stride // 2::stride]
+    return mask
+
 
 class MaskBranch(nn.Module):
     def __init__(self, cfg):
@@ -115,8 +122,8 @@ class MaskBranch(nn.Module):
                 ConvModule(channels, channels, kernel_size=3, stride=1, padding=1, norm_cfg=norm)
             )
 
-            num_classes = cfg.num_classes
-            self.logits = nn.Conv2d(channels, num_classes, kernel_size=1, stride=1)
+            self.num_classes = cfg.num_classes
+            self.logits = nn.Conv2d(channels, self.num_classes, kernel_size=1, stride=1)
 
             bias_value = -math.log((1 - prior_prob) / prior_prob)
             torch.nn.init.constant_(self.logits.bias, bias_value)
@@ -134,8 +141,7 @@ class MaskBranch(nn.Module):
                 assert target_w % w == 0
                 factor_h, factor_w = target_h // h, target_w // w
                 assert factor_h == factor_w
-                x_p = aligned_bilinear(x_p, factor_h) # TODO: different bilinear interpolate
-                # x_p = F.interpolate(x_p, size=(target_h,target_w), mode='bilinear', align_corners=True)
+                x_p = aligned_bilinear(x_p, factor_h)
                 x = x + x_p
 
         mask_feats = self.tower(x)
@@ -153,31 +159,25 @@ class MaskBranch(nn.Module):
             # compute semantic targets
             semantic_targets = []
             for gt_mask, gt_label in zip(gt_masks,gt_labels):
-                gt_mask = torch.tensor(gt_mask.masks, device=logits_pred.device)
                 h, w = gt_mask.size()[-2:]
                 areas = gt_mask.sum(dim=-1).sum(dim=-1)
                 areas = areas[:, None, None].repeat(1, h, w)
                 areas[gt_mask == 0] = INF
                 areas = areas.permute(1, 2, 0).reshape(h * w, -1)
                 min_areas, inds = areas.min(dim=1)
-                per_im_sematic_targets = gt_label[inds] + 1
-                per_im_sematic_targets[min_areas == INF] = 0
+                per_im_sematic_targets = gt_label[inds]
+                per_im_sematic_targets[min_areas == INF] = self.num_classes
                 per_im_sematic_targets = per_im_sematic_targets.reshape(h, w)
-                per_im_sematic_targets = F.interpolate(per_im_sematic_targets.view(1,1,h,w).to(dtype=torch.float), size=logits_pred.shape[-2:], mode='nearest')
                 semantic_targets.append(per_im_sematic_targets)
 
-            semantic_targets = torch.cat(semantic_targets, dim=0)
+            semantic_targets = torch.stack(semantic_targets, dim=0)
 
-            # prepare one-hot targets
-            num_classes = logits_pred.size(1)
-            class_range = torch.arange(
-                num_classes, dtype=logits_pred.dtype,
-                device=logits_pred.device
-            )[:, None, None]
-            class_range = class_range + 1
-            one_hot = (semantic_targets == class_range).float()
-            num_pos = (one_hot > 0).sum().float().clamp(min=1.0)
-            loss_sem = self.loss(logits_pred.permute(0,2,3,1).reshape(-1, num_classes), one_hot.permute(0,2,3,1).reshape(-1, num_classes).to(torch.long), avg_factor=num_pos)
+            # resize target to reduce memory
+            semantic_targets = downsample_mask(semantic_targets, self.out_stride)
+
+            num_pos = (semantic_targets > 0).sum().float().clamp(min=1.0)
+            
+            loss_sem = self.loss(logits_pred.permute(0,2,3,1).reshape(-1, self.num_classes), semantic_targets.reshape(-1).to(torch.long), avg_factor=num_pos)
             losses['loss_sem'] = loss_sem
 
         return mask_feats, losses
@@ -335,7 +335,7 @@ class DynamicMaskHead(nn.Module):
                     mask_feats, mask_feat_stride, pred_instances
                 )
                 gt_inds = pred_instances.gt_inds
-                gt_bitmasks = torch.cat([F.interpolate(gt_mask.to_tensor(dtype=mask_scores.dtype, device=mask_scores.device).unsqueeze(1), size=mask_scores.shape[-2:], mode='nearest') for gt_mask in gt_masks])
+                gt_bitmasks = torch.cat([downsample_mask(gt_mask, self.mask_out_stride) for gt_mask in gt_masks])
                 gt_bitmasks = gt_bitmasks[gt_inds].to(dtype=mask_feats.dtype)
                 mask_losses = dice_coefficient(mask_scores, gt_bitmasks)
                 loss_mask = mask_losses.mean()

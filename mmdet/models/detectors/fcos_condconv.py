@@ -3,6 +3,7 @@ from .single_stage import SingleStageDetector
 from mmdet.core import bbox2result
 import torch.nn.functional as F
 import torch
+from mmdet.models.roi_heads.mask_heads.condconv_mask_head import aligned_bilinear
 
 @DETECTORS.register_module()
 class FCOSCondConv(SingleStageDetector):
@@ -19,10 +20,18 @@ class FCOSCondConv(SingleStageDetector):
                                    test_cfg, pretrained)
 
     def mask2result(self, x, det_labels, inst_inds, img_meta):
+        resized_im_h, resized_im_w = img_meta['img_shape'][:2]
+        ori_h, ori_w = img_meta['ori_shape'][:2]
         pred_instances = self.bbox_head.pred_instances[inst_inds]
         mask_logits = self.bbox_head.mask_head(x, pred_instances)
         if len(pred_instances) > 0:
-            mask_logits = F.interpolate(mask_logits, size=img_meta['ori_shape'][:2], mode="bilinear", align_corners=True).squeeze(1)
+            mask_logits = aligned_bilinear(mask_logits, self.bbox_head.mask_head.head.mask_out_stride)
+            mask_logits = mask_logits[:, :, :resized_im_h, :resized_im_w]
+            mask_logits = F.interpolate(
+                mask_logits,
+                size=(ori_h, ori_w),
+                mode="bilinear", align_corners=False
+            ).squeeze(1)
             mask_pred = (mask_logits > 0.5).float()
         else:
             mask_pred = torch.zeros((self.bbox_head.num_classes, *img_meta['ori_shape'][:2]), dtype=torch.float)
@@ -93,6 +102,11 @@ class FCOSCondConv(SingleStageDetector):
             dict[str, Tensor]: A dictionary of loss components.
         """
         x = self.extract_feat(img)
+        masks = []
+        for mask in gt_masks:
+            mask_tensor = img.new_tensor(mask.masks)
+            mask_tensor = F.pad(mask_tensor, pad=(0, img.size(-1)-mask_tensor.size(-1), 0, img.size(-2)-mask_tensor.size(-2)))
+            masks.append(mask_tensor)
         losses = self.bbox_head.forward_train(x, img_metas, gt_bboxes,
-                                              gt_labels, gt_bboxes_ignore, gt_masks)
+                                              gt_labels, gt_bboxes_ignore, masks)
         return losses
