@@ -175,7 +175,7 @@ class MaskBranch(nn.Module):
             # resize target to reduce memory
             semantic_targets = downsample_mask(semantic_targets, self.out_stride)
 
-            num_pos = (semantic_targets > 0).sum().float().clamp(min=1.0)
+            num_pos = (semantic_targets < self.num_classes).sum().float().clamp(min=1.0)
             
             loss_sem = self.loss(logits_pred.permute(0,2,3,1).reshape(-1, self.num_classes), semantic_targets.reshape(-1).to(torch.long), avg_factor=num_pos)
             losses['loss_sem'] = loss_sem
