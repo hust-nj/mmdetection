@@ -69,7 +69,7 @@ def parse_args():
     # add aml support 
     parser.add_argument('--aml', action='store_true', help='whether to train on aml')
     parser.add_argument('--aml_data_store', default='/nj', help='aml data_store name')
-    parser.add_argument('--aml_work_dir_prefix', default='work_dirs/mmdet/',
+    parser.add_argument('--aml_work_dir_prefix', default='work_dirs/',
                         help='aml work_dir prefix')
 
     args = parser.parse_args()
@@ -102,21 +102,23 @@ def main():
         torch.backends.cudnn.benchmark = True
 
 
+    replace_data_root = False
     # phillytools
     if 'PT_DATA_DIR' in os.environ:
         data_store = os.environ['PT_DATA_DIR']
+        replace_data_root = True
     # add aml support 
     elif args.aml:
         data_store = args.aml_data_store
-    else:
-        data_store = ''
-    cfg.data.train.ann_file = osp.join(data_store, cfg.data.train.ann_file)
-    cfg.data.train.img_prefix = osp.join(data_store, cfg.data.train.img_prefix)
-    cfg.data.val.ann_file = osp.join(data_store, cfg.data.val.ann_file)
-    cfg.data.val.img_prefix = osp.join(data_store, cfg.data.val.img_prefix)
-    cfg.data.test.ann_file = osp.join(data_store, cfg.data.test.ann_file)
-    cfg.data.test.img_prefix = osp.join(data_store, cfg.data.test.img_prefix)
-    cfg.data_root = osp.join(data_store, cfg.data_root)
+        replace_data_root = True
+    if replace_data_root:
+        cfg.data.train.ann_file = cfg.data.train.ann_file.replace(cfg.data_root, data_store+'/', 1)
+        cfg.data.train.img_prefix = cfg.data.train.img_prefix.replace(cfg.data_root, data_store+'/', 1)
+        cfg.data.val.ann_file = cfg.data.val.ann_file.replace(cfg.data_root, data_store+'/', 1)
+        cfg.data.val.img_prefix = cfg.data.val.img_prefix.replace(cfg.data_root, data_store+'/', 1)
+        cfg.data.test.ann_file = cfg.data.test.ann_file.replace(cfg.data_root, data_store+'/', 1)
+        cfg.data.test.img_prefix = cfg.data.test.img_prefix.replace(cfg.data_root, data_store+'/', 1)
+        cfg.data_root = data_store
     print('data_root: ', cfg.data_root)
 
 

@@ -56,7 +56,7 @@ def _init_dist_mpi(backend, **kwargs):
         rank=rank,
         group_name='mtorch')
     print(
-        "World Size is {}, Backend is {}, Init Method is {}, rank is {}, gpu num is{}"
+        "World Size is {}, Backend is {}, Init Method is {}, rank is {}, gpu num is {}"
         .format(world_size, backend, dist_url, ompi_rank(), gpu_num))
 
 
