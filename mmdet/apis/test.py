@@ -133,6 +133,7 @@ def collect_results_cpu(result_part, size, tmpdir=None):
         dist.broadcast(dir_tensor, 0)
         tmpdir = dir_tensor.cpu().numpy().tobytes().decode().rstrip()
     else:
+        print(f"rank {rank}, world_size {world_size}, mkdir_or_exist {tmpdir}")
         mmcv.mkdir_or_exist(tmpdir)
     # dump the part result to the dir
     mmcv.dump(result_part, osp.join(tmpdir, f'part_{rank}.pkl'))
@@ -141,6 +142,8 @@ def collect_results_cpu(result_part, size, tmpdir=None):
     if rank != 0:
         return None
     else:
+        from os import listdir
+        print(f"rank {rank}, world_size {world_size}, listdir {listdir(tmpdir)}")
         # load results of all parts from tmp dir
         part_list = []
         for i in range(world_size):
@@ -153,6 +156,7 @@ def collect_results_cpu(result_part, size, tmpdir=None):
         # the dataloader may pad some samples
         ordered_results = ordered_results[:size]
         # remove tmp dir
+        print(f"rank {rank}, world_size {world_size}, rmdir")
         shutil.rmtree(tmpdir)
         return ordered_results
 
