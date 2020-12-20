@@ -140,10 +140,10 @@ def collect_results_cpu(result_part, size, tmpdir=None):
     dist.barrier()
     # collect all parts
     if rank != 0:
+        print(f"rank {rank}, world_size {world_size}, return None")
         return None
     else:
         from os import listdir
-        print(f"rank {rank}, world_size {world_size}, listdir {listdir(tmpdir)}")
         # load results of all parts from tmp dir
         part_list = []
         for i in range(world_size):
@@ -156,7 +156,8 @@ def collect_results_cpu(result_part, size, tmpdir=None):
         # the dataloader may pad some samples
         ordered_results = ordered_results[:size]
         # remove tmp dir
-        print(f"rank {rank}, world_size {world_size}, rmdir")
+        print(f"rank {rank}, world_size {world_size}, listdir {listdir(tmpdir)}")
+        print(f"rank {rank}, world_size {world_size}, rmdir {tmpdir}")
         shutil.rmtree(tmpdir)
         return ordered_results
 
