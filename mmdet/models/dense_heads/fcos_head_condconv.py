@@ -259,10 +259,12 @@ class FCOSHeadCondConv(AnchorFreeHead):
         bg_class_ind = self.num_classes
         pos_inds = ((flatten_labels >= 0)
                     & (flatten_labels < bg_class_ind)).nonzero().reshape(-1)
-        num_pos = len(pos_inds)
+        num_pos = torch.tensor(
+            len(pos_inds), dtype=torch.float, device=bbox_preds[0].device)
+        num_pos = reduce_mean(num_pos)
         loss_cls = self.loss_cls(
             flatten_cls_scores, flatten_labels,
-            avg_factor=num_pos + num_imgs)  # avoid num_pos is 0
+            avg_factor=max(num_pos, 1))  # avoid num_pos is 0
 
         pos_bbox_preds = flatten_bbox_preds[pos_inds]
         pos_centerness = flatten_centerness[pos_inds]
@@ -275,13 +277,15 @@ class FCOSHeadCondConv(AnchorFreeHead):
             pos_decoded_target_preds = distance2bbox(pos_points,
                                                      pos_bbox_targets)
             # centerness weighted iou loss
+            centerness_denorm = max(
+                reduce_mean(pos_centerness_targets.sum().detach()), 1e-6)
             loss_bbox = self.loss_bbox(
                 pos_decoded_bbox_preds,
                 pos_decoded_target_preds,
                 weight=pos_centerness_targets,
-                avg_factor=pos_centerness_targets.sum())
-            loss_centerness = self.loss_centerness(pos_centerness,
-                                                   pos_centerness_targets)
+                avg_factor=centerness_denorm)
+            loss_centerness = self.loss_centerness(
+                pos_centerness, pos_centerness_targets, avg_factor=max(num_pos, 1))
         else:
             loss_bbox = pos_bbox_preds.sum()
             loss_centerness = pos_centerness.sum()
