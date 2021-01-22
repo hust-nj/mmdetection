@@ -10,15 +10,15 @@ from .anchor_free_head import AnchorFreeHead
 from mmdet.utils.instances import Instances
 from mmdet.utils.common import compute_locations
 from itertools import accumulate
-
-
+from mmcv.utils import print_log
+from mmcv.runner import get_dist_info
+import pdb
 INF = 1e8
 
 
 @HEADS.register_module()
 class FCOSHeadCondConv(AnchorFreeHead):
     """Anchor-free head used in `FCOS <https://arxiv.org/abs/1904.01355>`_.
-
     The FCOS head does not use anchor boxes. Instead bounding boxes are
     predicted at each pixel and a centerness measure is used to supress
     low-quality predictions.
@@ -26,7 +26,6 @@ class FCOSHeadCondConv(AnchorFreeHead):
     tricks used in official repo, which will bring remarkable mAP gains
     of up to 4.9. Please see https://github.com/tianzhi0549/FCOS for
     more detail.
-
     Args:
         num_classes (int): Number of categories excluding the background
             category.
@@ -50,7 +49,6 @@ class FCOSHeadCondConv(AnchorFreeHead):
         loss_centerness (dict): Config of centerness loss.
         norm_cfg (dict): dictionary to construct and config norm layer.
             Default: norm_cfg=dict(type='GN', num_groups=32, requires_grad=True).
-
     Example:
         >>> self = FCOSHead(11, 7)
         >>> feats = [torch.rand(1, 7, s, s) for s in [4, 8, 16, 32, 64]]
@@ -121,11 +119,9 @@ class FCOSHeadCondConv(AnchorFreeHead):
 
     def forward(self, feats):
         """Forward features from the upstream network.
-
         Args:
             feats (tuple[Tensor]): Features from the upstream network, each is
                 a 4D-tensor.
-
         Returns:
             tuple:
                 cls_scores (list[Tensor]): Box scores for each scale level, \
@@ -155,7 +151,6 @@ class FCOSHeadCondConv(AnchorFreeHead):
 
     def forward_single(self, x, scale, stride, controller=None):
         """Forward features of a single scale levle.
-
         Args:
             x (Tensor): FPN feature maps of the specified stride.
             scale (:obj: `mmcv.cnn.Scale`): Learnable scale module to resize
@@ -163,7 +158,6 @@ class FCOSHeadCondConv(AnchorFreeHead):
             stride (int): The corresponding stride for feature maps, only
                 used to normalize the bbox prediction when self.norm_on_bbox
                 is True.
-
         Returns:
             tuple: scores for each class, bbox predictions and centerness \
                 predictions of input feature maps.
@@ -200,9 +194,9 @@ class FCOSHeadCondConv(AnchorFreeHead):
              gt_bboxes,
              gt_labels,
              img_metas,
+             gt_masks=None,
              gt_bboxes_ignore=None):
         """Compute loss of the head.
-
         Args:
             cls_scores (list[Tensor]): Box scores for each scale level,
                 each is a 4D-tensor, the channel number is
@@ -219,7 +213,6 @@ class FCOSHeadCondConv(AnchorFreeHead):
                 image size, scaling factor, etc.
             gt_bboxes_ignore (None | list[Tensor]): specify which bounding
                 boxes can be ignored when computing the loss.
-
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
@@ -228,7 +221,7 @@ class FCOSHeadCondConv(AnchorFreeHead):
         all_level_points = self.get_points(featmap_sizes, bbox_preds[0].dtype,
                                            bbox_preds[0].device)
         labels, bbox_targets, gt_inds = self.get_targets(all_level_points, gt_bboxes,
-                                                gt_labels)
+                                                gt_labels,gt_masks)
 
         num_imgs = cls_scores[0].size(0)
         # flatten cls_scores, bbox_preds and centerness
@@ -268,7 +261,7 @@ class FCOSHeadCondConv(AnchorFreeHead):
 
         pos_bbox_preds = flatten_bbox_preds[pos_inds]
         pos_centerness = flatten_centerness[pos_inds]
-
+       
         if len(pos_inds) > 0:
             pos_bbox_targets = flatten_bbox_targets[pos_inds]
             pos_centerness_targets = self.centerness_target(pos_bbox_targets)
@@ -279,6 +272,8 @@ class FCOSHeadCondConv(AnchorFreeHead):
             # centerness weighted iou loss
             centerness_denorm = max(
                 reduce_mean(pos_centerness_targets.sum().detach()), 1e-6)
+            # if get_dist_info()[0]==0:
+            #    print_log(f'centerness_sum:{centerness_denorm.item()};num_pos:{num_pos}')
             loss_bbox = self.loss_bbox(
                 pos_decoded_bbox_preds,
                 pos_decoded_target_preds,
@@ -291,9 +286,9 @@ class FCOSHeadCondConv(AnchorFreeHead):
             loss_centerness = pos_centerness.sum()
 
         return dict(
-            loss_cls=loss_cls,
-            loss_bbox=loss_bbox,
-            loss_centerness=loss_centerness)
+            loss_fcos_cls=loss_cls,
+            loss_focs_loc=loss_bbox,
+            loss_fcos_ctr=loss_centerness)
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds', 'centernesses'))
     def get_bboxes(self,
@@ -305,7 +300,6 @@ class FCOSHeadCondConv(AnchorFreeHead):
                    rescale=False,
                    with_nms=True):
         """Transform network output for a batch into bbox predictions.
-
         Args:
             cls_scores (list[Tensor]): Box scores for each scale level
                 with shape (N, num_points * num_classes, H, W).
@@ -321,7 +315,6 @@ class FCOSHeadCondConv(AnchorFreeHead):
                 Default: False.
             with_nms (bool): If True, do nms before return boxes.
                 Default: True.
-
         Returns:
             list[tuple[Tensor, Tensor]]: Each item in result_list is 2-tuple.
                 The first item is an (n, 5) tensor, where the first 4 columns
@@ -367,7 +360,6 @@ class FCOSHeadCondConv(AnchorFreeHead):
                            with_nms=True,
                            imid_shift=0):
         """Transform outputs for a single batch item into bbox predictions.
-
         Args:
             cls_scores (list[Tensor]): Box scores for a single scale level
                 with shape (num_points * num_classes, H, W).
@@ -387,7 +379,6 @@ class FCOSHeadCondConv(AnchorFreeHead):
                 Default: False.
             with_nms (bool): If True, do nms before return boxes.
                 Default: True.
-
         Returns:
             tuple(Tensor):
                 det_bboxes (Tensor): BBox predictions in shape (n, 5), where
@@ -476,10 +467,9 @@ class FCOSHeadCondConv(AnchorFreeHead):
                              dim=-1) + stride // 2
         return points
 
-    def get_targets(self, points, gt_bboxes_list, gt_labels_list):
+    def get_targets(self, points, gt_bboxes_list, gt_labels_list,gt_masks_list=None):
         """Compute regression, classification and centerss targets for points
         in multiple images.
-
         Args:
             points (list[Tensor]): Points of each fpn level, each has shape
                 (num_points, 2).
@@ -487,7 +477,6 @@ class FCOSHeadCondConv(AnchorFreeHead):
                 each has shape (num_gt, 4).
             gt_labels_list (list[Tensor]): Ground truth labels of each box,
                 each has shape (num_gt,).
-
         Returns:
             tuple:
                 concat_lvl_labels (list[Tensor]): Labels of each level. \
@@ -507,12 +496,14 @@ class FCOSHeadCondConv(AnchorFreeHead):
 
         # the number of points per img, per lvl
         num_points = [center.size(0) for center in points]
-
+        if gt_masks_list is None:
+            gt_masks_list = [None]*len(gt_labels_list)
         # get labels and bbox_targets of each image
         labels_list, bbox_targets_list, gt_inds = multi_apply(
             self._get_target_single,
             gt_bboxes_list,
             gt_labels_list,
+            gt_masks_list,
             points=concat_points,
             regress_ranges=concat_regress_ranges,
             num_points_per_lvl=num_points)
@@ -545,7 +536,7 @@ class FCOSHeadCondConv(AnchorFreeHead):
             concat_gt_inds.append(torch.cat([gt_inds[i] for gt_inds in shift_gt_inds]))
         return concat_lvl_labels, concat_lvl_bbox_targets, concat_gt_inds
 
-    def _get_target_single(self, gt_bboxes, gt_labels, points, regress_ranges,
+    def _get_target_single(self, gt_bboxes, gt_labels, gt_bit_masks, points, regress_ranges,
                            num_points_per_lvl):
         """Compute regression and classification targets for a single image."""
         num_points = points.size(0)
@@ -575,8 +566,23 @@ class FCOSHeadCondConv(AnchorFreeHead):
         if self.center_sampling:
             # condition1: inside a `center bbox`
             radius = self.center_sample_radius
-            center_xs = (gt_bboxes[..., 0] + gt_bboxes[..., 2]) / 2
-            center_ys = (gt_bboxes[..., 1] + gt_bboxes[..., 3]) / 2
+            if gt_bit_masks is not None:
+                _, _h, _w = gt_bit_masks.size()
+
+                _ys = torch.arange(0, _h, dtype=torch.float32, device=gt_bit_masks.device)
+                _xs = torch.arange(0, _w, dtype=torch.float32, device=gt_bit_masks.device)
+
+                m00 = gt_bit_masks.sum(dim=-1).sum(dim=-1).clamp(min=1e-6)
+                m10 = (gt_bit_masks * _xs).sum(dim=-1).sum(dim=-1)
+                m01 = (gt_bit_masks * _ys[:, None]).sum(dim=-1).sum(dim=-1)
+                center_xs = m10 / m00
+                center_ys = m01 / m00
+                center_xs = center_xs[None,...].expand(num_points,num_gts)
+                center_ys = center_ys[None,...].expand(num_points,num_gts)
+                
+            else:
+                center_xs = (gt_bboxes[..., 0] + gt_bboxes[..., 2]) / 2
+                center_ys = (gt_bboxes[..., 1] + gt_bboxes[..., 3]) / 2
             center_gts = torch.zeros_like(gt_bboxes)
             stride = center_xs.new_zeros(center_xs.shape)
 
@@ -633,11 +639,9 @@ class FCOSHeadCondConv(AnchorFreeHead):
 
     def centerness_target(self, pos_bbox_targets):
         """Compute centerness targets.
-
         Args:
             pos_bbox_targets (Tensor): BBox targets of positive bboxes in shape
                 (num_pos, 4)
-
         Returns:
             Tensor: Centerness target.
         """
@@ -671,7 +675,6 @@ class FCOSHeadCondConv(AnchorFreeHead):
             gt_bboxes_ignore (Tensor): Ground truth bboxes to be
             proposal_cfg (mmcv.Config): Test / postprocessing configuration,
                 if None, test_cfg would be used
-
         Returns:
             tuple:
                 losses: (dict[str, Tensor]): A dictionary of loss components.
@@ -680,10 +683,12 @@ class FCOSHeadCondConv(AnchorFreeHead):
         if gt_masks:
             self.masknum_sum = tuple(accumulate([0]+[len(mask) for mask in gt_masks][:-1]))
         outs = self(x)
+        
         if gt_labels is None:
             loss_inputs = outs + (gt_bboxes, img_metas)
         else:
-            loss_inputs = outs + (gt_bboxes, gt_labels, img_metas)
+            loss_inputs = outs + (gt_bboxes, gt_labels, img_metas,gt_masks)
+        
         losses = self.loss(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
         if self.mask_head:
             self.pred_instances = self.pred_instances[self.pred_instances.gt_inds != INF] # select only foreground labels
